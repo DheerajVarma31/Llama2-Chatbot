@@ -4,8 +4,6 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.llms import CTransformers
 from langchain.chains import RetrievalQA
-import logging
-
 import chainlit as cl
 import os
 
@@ -78,52 +76,28 @@ async def start():
 
     cl.user_session.set("chain", chain)
 
-from chainlit.step import Step
-
 @cl.on_message
 async def main(message: cl.Message):
-    user_input = message.content.strip().lower()
-
-    # Handle polite exit
-    if user_input in ["exit", "quit", "bye", "goodbye"]:
-        await cl.Message(content="Goodbye! 👋 Feel free to come back anytime.").send()
+    if message.content.lower() == "exit":
+        await cl.Message(content="Thank you for using the Medical Bot. Goodbye!").send()
         return
-
-    # Get the chain from user session
-    chain = cl.user_session.get("chain")
-    if not chain:
-        await cl.Message(content="Sorry, something went wrong. Please try restarting the chat.").send()
-        return
-
-    # Callback for streaming
+    chain = cl.user_session.get("chain") 
     cb = cl.AsyncLangchainCallbackHandler(
-        stream_final_answer=True,
-        answer_prefix_tokens=["FINAL", "ANSWER"]
+        stream_final_answer=True, answer_prefix_tokens=["FINAL", "ANSWER"]
     )
     cb.answer_reached = True
+    res = await chain.ainvoke({"query": message.content}, callbacks=[cb])
+    answer = res["result"]
+    sources = res.get("source_documents", [])
 
-    try:
-        async with Step(name="Processing your question..."):
-            res = await chain.ainvoke({"query": user_input}, callbacks=[cb])
+    if sources:
+        unique_sources = {
+        f"{doc.metadata.get('source', 'unknown').split(os.sep)[-1]} (page {doc.metadata.get('page_label', doc.metadata.get('page', 'N/A'))})"
+        for doc in sources
+    }
+        answer += "\n\nSources:\n" + "\n".join(unique_sources)
+        answer += "\n\nYou can ask another question or type 'exit' to end the conversation."
+    else:
+        answer += "\nNo sources found"
 
-        answer = res.get("result", "Sorry, I couldn't find an answer.")
-        sources = res.get("source_documents", [])
-
-        if sources:
-            unique_sources = {
-                f"{doc.metadata.get('source', 'unknown').split(os.sep)[-1]} (page {doc.metadata.get('page_label', doc.metadata.get('page', 'N/A'))})"
-                for doc in sources
-            }
-            answer += "\n\nSources:\n" + "\n".join(unique_sources)
-        else:
-            answer += "\n\nNo sources found."
-
-        await cl.Message(content=answer).send()
-
-    except Exception as e:
-        await cl.Message(content=f"❌ An error occurred: {str(e)}").send()
-
-logging.getLogger("langchain").setLevel(logging.ERROR)
-logging.getLogger("chainlit").setLevel(logging.WARNING)
-logging.getLogger("faiss").setLevel(logging.WARNING)
-logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+    await cl.Message(content=answer).send()
