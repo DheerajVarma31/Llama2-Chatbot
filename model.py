@@ -5,7 +5,6 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.llms import CTransformers
 from langchain.chains import RetrievalQA
 import chainlit as cl
-import os
 
 DB_FAISS_PATH = 'vectorstore/db_faiss'
 
@@ -78,25 +77,17 @@ async def start():
 
 @cl.on_message
 async def main(message: cl.Message):
-    if message.content.lower() == "exit":
-        await cl.Message(content="Thank you for using the Medical Bot. Goodbye!").send()
-        return
     chain = cl.user_session.get("chain") 
     cb = cl.AsyncLangchainCallbackHandler(
         stream_final_answer=True, answer_prefix_tokens=["FINAL", "ANSWER"]
     )
     cb.answer_reached = True
-    res = await chain.ainvoke({"query": message.content}, callbacks=[cb])
+    res = await chain.acall(message.content, callbacks=[cb])
     answer = res["result"]
     sources = res.get("source_documents", [])
 
     if sources:
-        unique_sources = {
-        f"{doc.metadata.get('source', 'unknown').split(os.sep)[-1]} (page {doc.metadata.get('page_label', doc.metadata.get('page', 'N/A'))})"
-        for doc in sources
-    }
-        answer += "\n\nSources:\n" + "\n".join(unique_sources)
-        answer += "\n\nYou can ask another question or type 'exit' to end the conversation."
+        answer += f"\nSources:" + str(sources)
     else:
         answer += "\nNo sources found"
 
