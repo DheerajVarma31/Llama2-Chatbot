@@ -205,3 +205,5 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+model/llama-2-7b-chat.ggmlv3.q8_0.bin
