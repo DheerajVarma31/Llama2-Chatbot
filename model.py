@@ -1,5 +1,4 @@
 import os
-import torch
 import chainlit as cl
 from langchain.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
@@ -10,9 +9,6 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.llms import CTransformers
 
 DB_FAISS_PATH = 'vectorstore/db_faiss'
-
-# Set device
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Prompt template
 custom_prompt_template = """Use the following pieces of information to answer the user's question.
@@ -28,7 +24,6 @@ Helpful answer:
 def set_custom_prompt():
     return PromptTemplate(template=custom_prompt_template, input_variables=["context", "question"])
 
-# Retrieval QA Chain
 def retrieval_qa_chain(llm, prompt, db):
     return RetrievalQA.from_chain_type(
         llm=llm,
@@ -38,54 +33,38 @@ def retrieval_qa_chain(llm, prompt, db):
         chain_type_kwargs={'prompt': prompt}
     )
 
-# Load LLM with optional GPU layers
 def load_llm():
-    # Load the locally downloaded model in CPU mode
-    llm = CTransformers(
-        model="model/llama-2-7b-chat.ggmlv3.q8_0.bin",
+    return CTransformers(
+        model="model/llama-2-7b-chat.ggmlv3.q4_0.bin",
         model_type="llama",
         config={
-            'max_new_tokens': 512,
-            'temperature': 0.5,
-            'gpu_layers': 0  # 🔁 set this to 0 to disable GPU (important!)
+            'max_new_tokens': 256,
+            'temperature': 0.5
         }
     )
-    return llm
 
-
-# QA Bot setup
 def qa_bot():
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
-        model_kwargs={'device': DEVICE}
-    )
-
-    # FAISS on CPU (Windows-safe)
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
-
     llm = load_llm()
     prompt = set_custom_prompt()
     return retrieval_qa_chain(llm, prompt, db)
 
-# Chainlit start handler
 @cl.on_chat_start
 async def start():
     chain = qa_bot()
     msg = cl.Message(content="Starting the bot...")
     await msg.send()
-    msg.content = "Hi, Welcome to Medical Bot. What is your query?"
+    msg.content = "Hi, Welcome to the Medical Bot. What would you like to ask?"
     await msg.update()
-
     cl.user_session.set("chain", chain)
 
-
-# Chainlit message handler
 @cl.on_message
 async def main(message: cl.Message):
     user_input = message.content.strip().lower()
 
     if user_input in ["exit", "quit", "bye", "goodbye"]:
-        await cl.Message(content="Goodbye! 👋 Feel free to come back anytime.").send()
+        await cl.Message(content="Goodbye! 👋").send()
         return
 
     chain = cl.user_session.get("chain")
