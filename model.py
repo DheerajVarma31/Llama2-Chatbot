@@ -4,6 +4,9 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.llms import CTransformers
 from langchain.chains import RetrievalQA
+# Optional: Use LangChain's streaming handler if needed
+from langchain.callbacks.streaming_stdout_async import AsyncStreamingStdOutCallbackHandler
+
 import chainlit as cl
 import os
 
@@ -103,7 +106,7 @@ async def main(message: cl.Message):
 
     try:
         async with Step(name="Processing your question..."):
-            res = await chain.ainvoke({"query": user_input}, callbacks=[cb])
+            res = await chain.ainvoke({"query": user_input})
 
         answer = res.get("result", "Sorry, I couldn't find an answer.")
 
