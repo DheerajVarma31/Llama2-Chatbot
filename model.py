@@ -78,23 +78,32 @@ async def start():
 
 @cl.on_message
 async def main(message: cl.Message):
-    chain = cl.user_session.get("chain") 
+    user_input = message.content.strip().lower()
+
+    # Handle polite exit
+    if user_input in ["exit", "quit", "bye", "goodbye"]:
+        await cl.Message(content="Goodbye! 👋 Feel free to come back anytime.").send()
+        return  # Stop processing further
+
+    # Continue with normal flow
+    chain = cl.user_session.get("chain")
     cb = cl.AsyncLangchainCallbackHandler(
-        stream_final_answer=True, answer_prefix_tokens=["FINAL", "ANSWER"]
+        stream_final_answer=True,
+        answer_prefix_tokens=["FINAL", "ANSWER"]
     )
     cb.answer_reached = True
-    res = await chain.acall(message.content, callbacks=[cb])
-    answer = res["result"]
-    sources = res.get("source_documents", [])
 
+    res = await chain.ainvoke({"query": user_input}, callbacks=[cb])
+    answer = res["result"]
+
+    sources = res.get("source_documents", [])
     if sources:
         unique_sources = {
-        f"{doc.metadata.get('source', 'unknown').split(os.sep)[-1]} (page {doc.metadata.get('page_label', doc.metadata.get('page', 'N/A'))})"
-        for doc in sources
-    }
+            f"{doc.metadata.get('source', 'unknown').split(os.sep)[-1]} (page {doc.metadata.get('page_label', doc.metadata.get('page', 'N/A'))})"
+            for doc in sources
+        }
         answer += "\n\nSources:\n" + "\n".join(unique_sources)
-        answer += "\n\nYou can ask another question or type 'exit' to end the conversation."
     else:
-        answer += "\nNo sources found"
+        answer += "\n\nNo sources found."
 
     await cl.Message(content=answer).send()
