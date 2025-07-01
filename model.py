@@ -1,4 +1,5 @@
 import os
+import torch
 import chainlit as cl
 from langchain.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
@@ -9,6 +10,9 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.llms import CTransformers
 
 DB_FAISS_PATH = 'vectorstore/db_faiss'
+
+# Set device
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Prompt template
 custom_prompt_template = """Use the following pieces of information to answer the user's question.
@@ -34,34 +38,38 @@ def retrieval_qa_chain(llm, prompt, db):
         chain_type_kwargs={'prompt': prompt}
     )
 
-# Load local LLM
+# Load LLM with optional GPU layers
 def load_llm():
     return CTransformers(
         model="model/llama-2-7b-chat.ggmlv3.q8_0.bin",
         model_type="llama",
+        config={"gpu_layers": 100},  # Reduce to 20–50 if you get CUDA OOM errors
         max_new_tokens=512,
         temperature=0.5
     )
 
-# QA Bot
+# QA Bot setup
 def qa_bot():
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2",
-        model_kwargs={'device': 'cpu'}
+        model_kwargs={'device': DEVICE}
     )
-    db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
-    llm = load_llm()
-    qa_prompt = set_custom_prompt()
-    return retrieval_qa_chain(llm, qa_prompt, db)
 
-# Chainlit start
+    # FAISS on CPU (Windows-safe)
+    db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
+
+    llm = load_llm()
+    prompt = set_custom_prompt()
+    return retrieval_qa_chain(llm, prompt, db)
+
+# Chainlit start handler
 @cl.on_chat_start
 async def start():
     chain = qa_bot()
     cl.user_session.set("chain", chain)
     await cl.Message(content="Hi, Welcome to Medical Bot. What is your query?").send()
 
-# Chat handler
+# Chainlit message handler
 @cl.on_message
 async def main(message: cl.Message):
     user_input = message.content.strip().lower()
