@@ -5,6 +5,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.llms import CTransformers
 from langchain.chains import RetrievalQA
 import chainlit as cl
+import os
 
 DB_FAISS_PATH = 'vectorstore/db_faiss'
 
@@ -51,7 +52,7 @@ def load_llm():
 def qa_bot():
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2",
                                        model_kwargs={'device': 'cpu'})
-    db = FAISS.load_local(DB_FAISS_PATH, embeddings,allow_dangerous_deserialization=True)
+    db = FAISS.load_local(DB_FAISS_PATH, embeddings, allow_dangerous_deserialization=True)
     llm = load_llm()
     qa_prompt = set_custom_prompt()
     qa = retrieval_qa_chain(llm, qa_prompt, db)
@@ -84,10 +85,15 @@ async def main(message: cl.Message):
     cb.answer_reached = True
     res = await chain.acall(message.content, callbacks=[cb])
     answer = res["result"]
-    sources = res["source_documents"]
+    sources = res.get("source_documents", [])
 
     if sources:
-        answer += f"\nSources:" + str(sources)
+        unique_sources = {
+        f"{doc.metadata.get('source', 'unknown').split(os.sep)[-1]} (page {doc.metadata.get('page_label', doc.metadata.get('page', 'N/A'))})"
+        for doc in sources
+    }
+        answer += "\n\nSources:\n" + "\n".join(unique_sources)
+        answer += "\n\nYou can ask another question or type 'exit' to end the conversation."
     else:
         answer += "\nNo sources found"
 
