@@ -40,13 +40,18 @@ def retrieval_qa_chain(llm, prompt, db):
 
 # Load LLM with optional GPU layers
 def load_llm():
-    return CTransformers(
+    # Load the locally downloaded model in CPU mode
+    llm = CTransformers(
         model="model/llama-2-7b-chat.ggmlv3.q8_0.bin",
         model_type="llama",
-        config={"gpu_layers": 100},  # Reduce to 20–50 if you get CUDA OOM errors
-        max_new_tokens=512,
-        temperature=0.5
+        config={
+            'max_new_tokens': 512,
+            'temperature': 0.5,
+            'gpu_layers': 0  # 🔁 set this to 0 to disable GPU (important!)
+        }
     )
+    return llm
+
 
 # QA Bot setup
 def qa_bot():
