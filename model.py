@@ -35,7 +35,7 @@ def retrieval_qa_chain(llm, prompt, db):
 
 def load_llm():
     return CTransformers(
-        model="model/llama-2-7b-chat.ggmlv3.q4_0.bin",
+        model="model/llama-2-7b-chat.ggmlv3.q8_0.bin",
         model_type="llama",
         config={
             'max_new_tokens': 256,
