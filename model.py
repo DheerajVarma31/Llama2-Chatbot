@@ -1,11 +1,11 @@
 import os
-import chainlit as cl
+import streamlit as st
 from langchain.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.llms import CTransformers
 
 DB_FAISS_PATH = 'vectorstore/db_faiss'
@@ -50,30 +50,27 @@ def qa_bot():
     prompt = set_custom_prompt()
     return retrieval_qa_chain(llm, prompt, db)
 
-@cl.on_chat_start
-async def start():
-    chain = qa_bot()
-    msg = cl.Message(content="Starting the bot...")
-    await msg.send()
-    msg.content = "Hi, Welcome to the Medical Bot. What would you like to ask?"
-    await msg.update()
-    cl.user_session.set("chain", chain)
+# --- Streamlit App Start ---
+st.set_page_config(page_title="Medical Chatbot", layout="wide")
+st.title("🩺 Medical Q&A Bot")
 
-@cl.on_message
-async def main(message: cl.Message):
-    user_input = message.content.strip().lower()
+# Initialize session state
+if "chain" not in st.session_state:
+    with st.spinner("Initializing chatbot..."):
+        st.session_state.chain = qa_bot()
+        st.session_state.chat_history = []
 
-    if user_input in ["exit", "quit", "bye", "goodbye"]:
-        await cl.Message(content="Goodbye! 👋").send()
-        return
+# Chat UI
+user_query = st.chat_input("Ask your medical question...")
 
-    chain = cl.user_session.get("chain")
-    if not chain:
-        await cl.Message(content="⚠️ Error: Chain not initialized.").send()
-        return
+if user_query:
+    st.session_state.chat_history.append(("user", user_query))
+    with st.chat_message("user"):
+        st.markdown(user_query)
 
     try:
-        res = await chain.ainvoke({"query": message.content})
+        chain = st.session_state.chain
+        res = chain.invoke({"query": user_query})
         answer = res.get("result", "Sorry, I couldn't find an answer.")
 
         sources = res.get("source_documents", [])
@@ -82,10 +79,22 @@ async def main(message: cl.Message):
                 f"{doc.metadata.get('source', 'unknown').split(os.sep)[-1]} (page {doc.metadata.get('page_label', doc.metadata.get('page', 'N/A'))})"
                 for doc in sources
             }
-            answer += "\n\nSources:\n" + "\n".join(unique_sources)
+            answer += "\n\n**Sources:**\n" + "\n".join(unique_sources)
         else:
-            answer += "\n\nNo sources found."
+            answer += "\n\n_No sources found._"
 
-        await cl.Message(content=answer).send()
+        st.session_state.chat_history.append(("bot", answer))
+        with st.chat_message("assistant"):
+            st.markdown(answer)
+
     except Exception as e:
-        await cl.Message(content=f"❌ Error: {str(e)}").send()
+        error_msg = f"❌ Error: {str(e)}"
+        st.session_state.chat_history.append(("bot", error_msg))
+        with st.chat_message("assistant"):
+            st.error(error_msg)
+
+# Display chat history (on refresh)
+for role, content in st.session_state.chat_history:
+    with st.chat_message(role):
+        st.markdown(content)
+
