@@ -15,9 +15,8 @@ If you don't know the answer, just say that you don't know, don't try to make up
 Context: {context}
 Question: {question}
 
-Provide a complete and helpful answer to the user's question. Be detailed and accurate.
+Only return the helpful answer below and nothing else.
 Helpful answer:
-
 """
 
 def set_custom_prompt():
@@ -28,14 +27,10 @@ def load_llm():
         model=r"C:\Users\dheer\Llama2-Chatbot\model\llama-2-7b-chat.ggmlv3.q8_0.bin",
         model_type="llama",
         config={
-            'max_new_tokens': 512,     # 🔼 Increased from 256
-            'temperature': 0.7,        # 🔼 Slightly higher for more creative/longer responses
-            'top_k': 50,
-            'top_p': 0.95,
-            'repetition_penalty': 1.1
+            'max_new_tokens': 256,
+            'temperature': 0.5
         }
     )
-
 
 def qa_bot():
     embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')
@@ -45,7 +40,7 @@ def qa_bot():
     return RetrievalQA.from_chain_type(
         llm=llm,
         chain_type='stuff',
-        retriever=db.as_retriever(search_kwargs={'k': 4}),
+        retriever=db.as_retriever(search_kwargs={'k': 2}),
         return_source_documents=True,
         chain_type_kwargs={'prompt': prompt}
     )
